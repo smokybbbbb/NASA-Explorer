@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="สำรวจจักรวาลด้วยข้อมูลจริงจาก NASA Open API">
+  <title>NASA Explorer · สำรวจจักรวาล</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <canvas id="starsCanvas" class="stars-canvas"></canvas>
+
+  <!-- Navigation -->
+  <nav class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-brand">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-4.08 3.05-7.44 7-7.93v15.86zm2-15.86c1.03.13 2 .45 2.87.93H13v-.93zM13 7h5.24c.25.31.48.65.68 1H13V7zm0 3h6.74c.08.32.15.65.19.99L13 11V10zm0 2 6.93.01c-.03.33-.08.65-.15.99H13v-1zm0 2h6.78c-.2.35-.43.69-.68 1H13v-1zm0 3h2.87c-.87.48-1.84.8-2.87.93V17z"/>
+        </svg>
+        <span>NASA Explorer</span>
+      </a>
+      <div class="nav-links" id="navLinks">
+        <a href="#apod" class="nav-link">ภาพแห่งวัน</a>
+        <a href="#mars" class="nav-link">Mars</a>
+        <a href="#neo" class="nav-link">Asteroids</a>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="เปิด/ปิด เมนู" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="nav-mobile" id="navMobile" aria-hidden="true">
+      <a href="#apod" class="nav-mobile-link">ภาพดาราศาสตร์แห่งวัน</a>
+      <a href="#mars" class="nav-mobile-link">ภาพจากดาวอังคาร</a>
+      <a href="#neo" class="nav-mobile-link">ดาวเคราะห์น้อยใกล้โลก</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero" id="hero">
+    <div class="hero-img" id="heroImg"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <p class="hero-eyebrow">
+        <span class="hero-dot"></span>
+        NASA Open Data · Live
+      </p>
+      <h1 class="hero-title">สำรวจ<br>จักรวาล</h1>
+      <p class="hero-sub">ข้อมูลจริงจาก NASA · ภาพดาราศาสตร์ประจำวัน<br>ภารกิจ Mars Rover · ดาวเคราะห์น้อยใกล้โลก</p>
+      <a href="#apod" class="hero-btn">เริ่มสำรวจ ↓</a>
+    </div>
+  </section>
+
+  <main>
+
+    <!-- APOD -->
+    <section class="section" id="apod">
+      <div class="container">
+        <header class="section-head">
+          <span class="section-badge">Astronomy Picture of the Day</span>
+          <h2 class="section-title">ภาพดาราศาสตร์แห่งวัน</h2>
+          <p class="section-sub">คัดสรรและอธิบายโดยนักดาราศาสตร์ NASA ประจำวันที่ <span id="apodDateLabel">—</span></p>
+        </header>
+        <div id="apodCard" class="apod-card">
+          <div class="apod-img-wrap skeleton-block" id="apodImgWrap"></div>
+          <div class="apod-info" id="apodInfo">
+            <div class="skeleton-line" style="width:40%;height:14px;margin-bottom:14px"></div>
+            <div class="skeleton-line" style="height:26px;margin-bottom:6px"></div>
+            <div class="skeleton-line" style="width:75%;height:26px;margin-bottom:22px"></div>
+            <div class="skeleton-line" style="height:13px;margin-bottom:7px"></div>
+            <div class="skeleton-line" style="height:13px;margin-bottom:7px"></div>
+            <div class="skeleton-line" style="width:85%;height:13px;margin-bottom:7px"></div>
+            <div class="skeleton-line" style="width:90%;height:13px;margin-bottom:7px"></div>
+            <div class="skeleton-line" style="width:60%;height:13px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mars Rover -->
+    <section class="section section--alt" id="mars">
+      <div class="container">
+        <header class="section-head">
+          <span class="section-badge">Mars Rover · Curiosity</span>
+          <h2 class="section-title">ภาพจากดาวอังคาร</h2>
+          <p class="section-sub">ภาพล่าสุดที่ถ่ายโดย Curiosity Rover บนพื้นผิวดาวอังคาร</p>
+        </header>
+        <div id="roverMeta" class="rover-meta"></div>
+        <div id="marsGrid" class="mars-grid">
+          <div class="mars-card skeleton-card"></div>
+          <div class="mars-card skeleton-card"></div>
+          <div class="mars-card skeleton-card"></div>
+          <div class="mars-card skeleton-card"></div>
+          <div class="mars-card skeleton-card"></div>
+          <div class="mars-card skeleton-card"></div>
+          <div class="mars-card skeleton-card"></div>
+          <div class="mars-card skeleton-card"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Near Earth Objects -->
+    <section class="section" id="neo">
+      <div class="container">
+        <header class="section-head">
+          <span class="section-badge">Near Earth Objects</span>
+          <h2 class="section-title">ดาวเคราะห์น้อยใกล้โลก</h2>
+          <p class="section-sub">วัตถุใกล้โลกที่ NASA ติดตามในช่วง 7 วันนี้</p>
+        </header>
+        <div id="neoSummary" class="neo-summary"></div>
+
+        <!-- 3D Visualization -->
+        <div id="neo3d" class="neo3d-wrap">
+          <div id="neo3dTooltip" class="neo3d-tooltip" aria-live="polite"></div>
+          <div class="neo3d-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#42a5f5"></span>ปลอดภัย</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ef5350"></span>อาจเป็นอันตราย</div>
+            <div class="legend-sep"></div>
+            <div class="legend-item"><span class="legend-ring" style="border-color:rgba(96,130,220,.7)"></span>วงโคจรดวงจันทร์ (1 LD)</div>
+            <div class="legend-item"><span class="legend-ring" style="border-color:rgba(80,100,130,.45)"></span>10 · 20 · 30 LD</div>
+          </div>
+          <div class="neo3d-hint">ลาก: หมุน · Scroll: ซูม · ชี้วัตถุ: รายละเอียด</div>
+          <div class="neo3d-loading" id="neo3dLoading">
+            <div class="neo3d-spinner"></div>
+            <span>กำลังโหลดข้อมูล…</span>
+          </div>
+        </div>
+
+        <h3 class="neo-list-title">รายการวัตถุทั้งหมด</h3>
+        <div id="neoGrid" class="neo-grid">
+          <div class="neo-card skeleton-card"></div>
+          <div class="neo-card skeleton-card"></div>
+          <div class="neo-card skeleton-card"></div>
+          <div class="neo-card skeleton-card"></div>
+          <div class="neo-card skeleton-card"></div>
+          <div class="neo-card skeleton-card"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">NASA Explorer</div>
+      <p class="footer-text">
+        ข้อมูลจาก <a href="https://api.nasa.gov" target="_blank" rel="noopener">NASA Open APIs</a>
+        · <span id="footerDate"></span>
+      </p>
+      <p class="footer-note">ใช้ DEMO_KEY — จำกัด 30 req/hour · 50 req/day</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

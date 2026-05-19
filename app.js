@@ -2,8 +2,9 @@
    NASA Explorer · app.js
    ================================================ */
 
-const API_KEY  = 'DEMO_KEY';
-const BASE_URL = 'https://api.nasa.gov';
+function getApiKey() {
+  return CONFIG.apiKey;
+}
 
 /* ---- Init ---- */
 document.addEventListener('DOMContentLoaded', () => {
@@ -117,11 +118,46 @@ function errorHTML(title, detail) {
     </div>`;
 }
 
-async function apiFetch(url) {
+/* -- localStorage cache -- */
+function getCached(key) {
+  try {
+    const raw = localStorage.getItem(`nasa_cache_${key}`);
+    if (!raw) return null;
+    const { data, expires } = JSON.parse(raw);
+    if (Date.now() > expires) { localStorage.removeItem(`nasa_cache_${key}`); return null; }
+    return data;
+  } catch { return null; }
+}
+
+function setCache(key, data, ttlMs) {
+  try {
+    localStorage.setItem(`nasa_cache_${key}`, JSON.stringify({ data, expires: Date.now() + ttlMs }));
+  } catch {}
+}
+
+function clearCache() {
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('nasa_cache_'))
+    .forEach(k => localStorage.removeItem(k));
+}
+
+async function apiFetch(url, cacheKey, ttlMs) {
+  if (cacheKey) {
+    const hit = getCached(cacheKey);
+    if (hit) { console.info(`[cache] ${cacheKey}`); return hit; }
+  }
   const res = await fetch(url);
-  if (res.status === 429) throw new Error('เกินจำนวน API requests (rate limited) กรุณารอสักครู่');
+  if (res.status === 429) {
+    showRateLimitBanner();
+    throw new Error('rate_limited');
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  // don't cache empty photo arrays — let next request retry
+  const isEmpty = Array.isArray(data.latest_photos) && data.latest_photos.length === 0
+               || Array.isArray(data.photos)         && data.photos.length === 0;
+  if (cacheKey && ttlMs && !isEmpty) setCache(cacheKey, data, ttlMs);
+  return data;
 }
 
 function setFooterDate() {
@@ -134,7 +170,11 @@ function setFooterDate() {
    ================================================ */
 async function loadAPOD() {
   try {
-    const data = await apiFetch(`${BASE_URL}/planetary/apod?api_key=${API_KEY}`);
+    const data = await apiFetch(
+      `${CONFIG.baseUrl}/planetary/apod?api_key=${getApiKey()}`,
+      'apod_' + toDateStr(new Date()),
+      CONFIG.cache.apod
+    );
     renderAPOD(data);
   } catch (err) {
     document.getElementById('apodCard').innerHTML =
@@ -176,93 +216,66 @@ function renderAPOD(data) {
 }
 
 /* ================================================
-   MARS ROVER
+   MARS — NASA Image & Video Library
    ================================================ */
 async function loadMarsPhotos() {
   const grid = document.getElementById('marsGrid');
   const meta = document.getElementById('roverMeta');
 
   try {
-    // 1st try: latest_photos shortcut
-    let photos = [];
-    try {
-      const data = await apiFetch(
-        `${BASE_URL}/mars-photos/api/v1/rovers/curiosity/latest_photos?api_key=${API_KEY}`
-      );
-      photos = data.latest_photos || [];
-    } catch (e) {
-      console.warn('[Mars] latest_photos failed:', e.message);
+    const { query, yearStart, photoLimit } = CONFIG.mars;
+    const url = `${CONFIG.imagesUrl}/search?q=${encodeURIComponent(query)}`
+              + `&media_type=image&year_start=${yearStart}&page_size=40`;
+
+    const data = await apiFetch(url, 'mars_images', CONFIG.cache.marsImages);
+    const items = (data.collection?.items || [])
+      .filter(item => item.links?.length && item.data?.length)
+      .slice(0, photoLimit);
+
+    if (!items.length) {
+      grid.innerHTML = errorHTML('ไม่พบภาพ Mars', 'ลองเปลี่ยน query ใน config.js');
+      meta.innerHTML = '';
+      return;
     }
 
-    // 2nd try: fetch manifest → find max_sol → query photos for that sol
-    if (photos.length === 0) {
-      const manifest = await apiFetch(
-        `${BASE_URL}/mars-photos/api/v1/manifests/curiosity?api_key=${API_KEY}`
-      );
-      const maxSol = manifest.photo_manifest.max_sol;
+    meta.innerHTML = `
+      <div class="rover-chip">
+        <span class="rover-chip-label">แหล่งข้อมูล</span>
+        <span class="rover-chip-val">NASA Image Library</span>
+      </div>
+      <div class="rover-chip">
+        <span class="rover-chip-label">ภารกิจ</span>
+        <span class="rover-chip-val">Perseverance · Mars 2020</span>
+      </div>
+      <div class="rover-chip">
+        <span class="rover-chip-label">ภาพที่พบ</span>
+        <span class="rover-chip-val">${items.length} ภาพ</span>
+      </div>`;
 
-      // Walk back up to 5 sols until we find photos
-      for (let sol = maxSol; sol >= maxSol - 5 && photos.length === 0; sol--) {
-        const data = await apiFetch(
-          `${BASE_URL}/mars-photos/api/v1/rovers/curiosity/photos?sol=${sol}&api_key=${API_KEY}`
-        );
-        photos = data.photos || [];
-      }
-    }
+    grid.innerHTML = items.map((item, i) => {
+      const d       = item.data[0];
+      const thumb   = item.links[0].href;
+      const fullUrl = `https://images-assets.nasa.gov/image/${d.nasa_id}/${d.nasa_id}~orig.jpg`;
+      const date    = d.date_created ? d.date_created.slice(0, 10) : '';
 
-    renderMarsPhotos(photos);
+      return `
+        <div class="mars-card fade-up" style="animation-delay:${(i * 0.045).toFixed(2)}s"
+             onclick="window.open('${fullUrl}','_blank')" role="button" tabindex="0"
+             aria-label="${esc(d.title)}">
+          <div class="mars-card-img">
+            <img src="${thumb}" alt="${esc(d.title)}" loading="lazy">
+          </div>
+          <div class="mars-card-body">
+            <div class="mars-card-camera">${esc(d.title)}</div>
+            <div class="mars-card-sol">${date}</div>
+          </div>
+        </div>`;
+    }).join('');
   } catch (err) {
     console.error('[Mars] load failed:', err);
-    grid.innerHTML = errorHTML('ไม่สามารถโหลดภาพ Mars Rover ได้', err.message);
+    grid.innerHTML = errorHTML('ไม่สามารถโหลดภาพ Mars ได้', err.message);
     meta.innerHTML = '';
   }
-}
-
-function renderMarsPhotos(photos) {
-  const grid = document.getElementById('marsGrid');
-  const meta = document.getElementById('roverMeta');
-
-  if (!photos.length) {
-    grid.innerHTML = errorHTML('ไม่พบภาพล่าสุด', 'อาจเกิดจากข้อจำกัดของ DEMO_KEY');
-    return;
-  }
-
-  const rover = photos[0].rover;
-  meta.innerHTML = `
-    <div class="rover-chip">
-      <span class="rover-chip-label">Rover</span>
-      <span class="rover-chip-val">${esc(rover.name)}</span>
-    </div>
-    <div class="rover-chip">
-      <span class="rover-chip-label">สถานะ</span>
-      <span class="rover-chip-val ${rover.status === 'active' ? 'active' : ''}">${rover.status === 'active' ? '● กำลังทำงาน' : rover.status}</span>
-    </div>
-    <div class="rover-chip">
-      <span class="rover-chip-label">Sol</span>
-      <span class="rover-chip-val">${fmtNum(photos[0].sol)}</span>
-    </div>
-    <div class="rover-chip">
-      <span class="rover-chip-label">วันที่โลก</span>
-      <span class="rover-chip-val">${fmtDateThai(photos[0].earth_date)}</span>
-    </div>
-    <div class="rover-chip">
-      <span class="rover-chip-label">ภาพทั้งหมด</span>
-      <span class="rover-chip-val">${photos.length} ภาพ</span>
-    </div>`;
-
-  const display = photos.slice(0, 12);
-  grid.innerHTML = display.map((p, i) => `
-    <div class="mars-card fade-up" style="animation-delay:${(i * 0.045).toFixed(2)}s"
-         onclick="window.open('${p.img_src}','_blank')" role="button" tabindex="0"
-         aria-label="ภาพ ${esc(p.camera.full_name)} Sol ${p.sol}">
-      <div class="mars-card-img">
-        <img src="${p.img_src}" alt="Mars rover photo — ${esc(p.camera.full_name)}" loading="lazy">
-      </div>
-      <div class="mars-card-body">
-        <div class="mars-card-camera">${esc(p.camera.full_name)}</div>
-        <div class="mars-card-sol">Sol ${fmtNum(p.sol)} · ${p.earth_date}</div>
-      </div>
-    </div>`).join('');
 }
 
 /* ================================================
@@ -272,14 +285,16 @@ async function loadNEO() {
   try {
     const today = new Date();
     const start = toDateStr(today);
-    const end   = toDateStr(new Date(today.getTime() + 7 * 86400000));
+    const end   = toDateStr(new Date(today.getTime() + CONFIG.neo.rangeDays * 86400000));
     const data  = await apiFetch(
-      `${BASE_URL}/neo/rest/v1/feed?start_date=${start}&end_date=${end}&api_key=${API_KEY}`
+      `${CONFIG.baseUrl}/neo/rest/v1/feed?start_date=${start}&end_date=${end}&api_key=${getApiKey()}`,
+      `neo_${start}`, CONFIG.cache.neo
     );
     renderNEO(data);
   } catch (err) {
     document.getElementById('neoGrid').innerHTML =
-      errorHTML('ไม่สามารถโหลดข้อมูล Near Earth Objects ได้', err.message);
+      errorHTML('ไม่สามารถโหลดข้อมูล Near Earth Objects ได้',
+        err.message === 'rate_limited' ? 'DEMO_KEY ถึง rate limit — ใส่ API Key ของตัวเองด้านบนเพื่อปลดล็อก' : err.message);
     document.getElementById('neoSummary').innerHTML = '';
   }
 }
@@ -319,7 +334,7 @@ function renderNEO(data) {
   // Boot 3D view
   initNEO3D(all);
 
-  const display = all.slice(0, 12);
+  const display = all.slice(0, CONFIG.neo.displayLimit);
   grid.innerHTML = display.map((neo, i) => {
     const approach   = neo.close_approach_data[0];
     const danger     = neo.is_potentially_hazardous_asteroid;
